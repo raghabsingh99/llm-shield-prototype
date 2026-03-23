@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Shield Prototype</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7fb; color: #1f2937; }
+    .container { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    .hero, .grid, .row { display: grid; gap: 16px; }
+    .hero { grid-template-columns: 2fr 1fr; align-items: stretch; }
+    .grid { grid-template-columns: repeat(4, 1fr); margin: 20px 0; }
+    .row { grid-template-columns: 1.3fr 1fr; }
+    .card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); }
+    h1, h2, h3, p { margin-top: 0; }
+    .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #e5eefc; font-size: 12px; }
+    .metric { font-size: 30px; font-weight: 700; }
+    .muted { color: #6b7280; font-size: 13px; }
+    textarea, input[type=file] { width: 100%; box-sizing: border-box; }
+    textarea { min-height: 160px; border-radius: 12px; border: 1px solid #d1d5db; padding: 12px; }
+    button { border: none; border-radius: 10px; padding: 12px 16px; font-weight: 600; cursor: pointer; background: #111827; color: #fff; }
+    button:hover { opacity: 0.95; }
+    .safe { color: #0f766e; }
+    .adv { color: #b91c1c; }
+    .event { border-top: 1px solid #e5e7eb; padding: 12px 0; }
+    .mono { white-space: pre-wrap; word-break: break-word; font-family: Consolas, monospace; font-size: 13px; }
+    .list { margin: 0; padding-left: 18px; }
+    @media (max-width: 900px) {
+      .hero, .grid, .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <div class="card">
+        <span class="badge">GitHub-ready research prototype</span>
+        <h1>LLM Shield Prototype</h1>
+        <p>This demo implements the paper's core idea: TF-IDF feature extraction, Linear SVM classification, lightweight linguistic analysis, and a FastAPI dashboard for prompt scanning.</p>
+        <p class="muted">Important: this repository is a prototype built with demo data, not a production security control.</p>
+      </div>
+      <div class="card">
+        <h3>Model Summary</h3>
+        <p class="muted">Dataset: {{ stats.dataset_name }}</p>
+        <p class="muted">Train size: {{ stats.train_size }}</p>
+        <p class="muted">Test size: {{ stats.test_size }}</p>
+        <p class="muted">Training accuracy: {{ stats.training_accuracy }}</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h3>Total Scans</h3><div class="metric">{{ stats.total_scans }}</div></div>
+      <div class="card"><h3>Safe</h3><div class="metric">{{ stats.safe_count }}</div></div>
+      <div class="card"><h3>Adversarial</h3><div class="metric">{{ stats.adversarial_count }}</div></div>
+      <div class="card"><h3>F1 Score</h3><div class="metric">{{ metrics.f1 if metrics else 0 }}</div></div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <h2>Analyze Prompt</h2>
+        <textarea id="promptBox" placeholder="Paste a prompt here..."></textarea>
+        <div style="display:flex; gap:12px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+          <button onclick="submitPrompt()">Scan Prompt</button>
+          <span class="muted">or upload a .txt file</span>
+        </div>
+        <div style="margin-top:12px;"><input type="file" id="fileInput" accept=".txt" /></div>
+        <div id="result" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="card">
+        <h2>Recent Events</h2>
+        {% if events %}
+          {% for event in events %}
+            <div class="event">
+              <div><strong class="{{ 'adv' if event.label == 1 else 'safe' }}">{{ event.label_name|upper }}</strong> • {{ event.confidence }}</div>
+              <div class="muted">{{ event.timestamp }} • {{ event.source }}</div>
+              <div class="mono">{{ event.prompt }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="muted">No events yet. Run a scan to populate the dashboard.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:16px;">
+      <div class="card">
+        <h2>API Endpoints</h2>
+        <ul class="list">
+          <li><code>GET /health</code></li>
+          <li><code>GET /stats</code></li>
+          <li><code>GET /events</code></li>
+          <li><code>POST /predict</code></li>
+          <li><code>POST /predict-file</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Prototype Notes</h2>
+        <ul class="list">
+          <li>In-memory event log only</li>
+          <li>Demo confidence score, not calibrated probability</li>
+          <li>Replace sample CSV with your full dataset to retrain</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function renderResult(data) {
+      const cls = data.label === 1 ? 'adv' : 'safe';
+      const patterns = data.analysis.override_patterns.length ? data.analysis.override_patterns.join(', ') : 'none';
+      const suspicious = data.analysis.suspicious_terms.length
+        ? data.analysis.suspicious_terms.map(item => `${item[0]} (${item[1]})`).join(', ')
+        : 'none';
+
+      document.getElementById('result').innerHTML = `
+        <div class="card">
+          <h3>Prediction</h3>
+          <p class="metric ${cls}" style="font-size:24px;">${data.label_name.toUpperCase()}</p>
+          <p class="muted">Confidence display: ${data.confidence}</p>
+          <p class="muted">Word count: ${data.analysis.word_count}</p>
+          <p class="muted">Sentences: ${data.analysis.sentence_count}</p>
+          <p class="muted">Average words per sentence: ${data.analysis.avg_words_per_sentence}</p>
+          <p class="muted">Lexical diversity: ${data.analysis.lexical_diversity}</p>
+          <p class="muted">Override patterns: ${patterns}</p>
+          <p class="muted">Suspicious terms: ${suspicious}</p>
+        </div>
+      `;
+    }
+
+    async function submitPrompt() {
+      const prompt = document.getElementById('promptBox').value.trim();
+      if (!prompt) {
+        alert('Please enter a prompt.');
+        return;
+      }
+      const response = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, source: 'dashboard-ui' })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Prediction failed');
+        return;
+      }
+      renderResult(data);
+      setTimeout(() => window.location.reload(), 400);
+    }
+
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/predict-file', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Upload failed');
+        return;
+      }
+      renderResult(data);
+      setTimeout(() => window.location.reload(), 400);
+    });
+  </script>
+</body>
+</html>
