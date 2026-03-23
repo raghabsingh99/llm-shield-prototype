@@ -22,13 +22,6 @@ It does **not** include:
 
 That distinction matters. If you publish it as a **prototype/demo implementation**, it is credible and honest.
 
-## Why this matches the paper
-Your uploaded paper describes:
-- a bespoke dataset of **2,500 prompts** with **1,050 safe** and **1,450 adversarial** samples
-- preprocessing plus **TF-IDF** features
-- multiple classical ML classifiers with **SVM** as the best performer
-- a web platform called **LLM Shield** with dashboard, backend engine, middleware, and logging fileciteturn1file0L1-L20 fileciteturn1file1L1-L17 fileciteturn1file2L1-L17
-
 This repo implements that core idea as a runnable prototype.
 
 ## Project structure
